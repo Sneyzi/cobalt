@@ -1,23 +1,23 @@
 import cors from "cors";
 import http from "node:http";
 import rateLimit from "express-rate-limit";
-import { setGlobalDispatcher, ProxyAgent } from "undici";
-import { getCommit, getBranch, getRemote, getVersion } from "@imput/version-info";
+import {setGlobalDispatcher, ProxyAgent} from "undici";
+import {getCommit, getBranch, getRemote, getVersion} from "@imput/version-info";
 
 import jwt from "../security/jwt.js";
 import stream from "../stream/stream.js";
 import match from "../processing/match.js";
 
-import { env, isCluster, setTunnelPort } from "../config.js";
-import { extract } from "../processing/url.js";
-import { Green, Bright, Cyan } from "../misc/console-text.js";
-import { hashHmac } from "../security/secrets.js";
-import { createStore } from "../store/redis-ratelimit.js";
-import { randomizeCiphers } from "../misc/randomize-ciphers.js";
-import { verifyTurnstileToken } from "../security/turnstile.js";
-import { friendlyServiceName } from "../processing/service-alias.js";
-import { verifyStream, getInternalStream } from "../stream/manage.js";
-import { createResponse, normalizeRequest, getIP } from "../processing/request.js";
+import {env, isCluster, setTunnelPort} from "../config.js";
+import {normalizeURL, extract} from "../processing/url.js";
+import {Green, Bright, Cyan} from "../misc/console-text.js";
+import {hashHmac} from "../security/secrets.js";
+import {createStore} from "../store/redis-ratelimit.js";
+import {randomizeCiphers} from "../misc/randomize-ciphers.js";
+import {verifyTurnstileToken} from "../security/turnstile.js";
+import {friendlyServiceName} from "../processing/service-alias.js";
+import {verifyStream, getInternalStream} from "../stream/manage.js";
+import {createResponse, normalizeRequest, getIP} from "../processing/request.js";
 import * as APIKeys from "../security/api-keys.js";
 import * as Cookies from "../processing/cookie/manager.js";
 
@@ -37,7 +37,7 @@ const corsConfig = env.corsWildcard ? {} : {
 }
 
 const fail = (res, code, context) => {
-    const { status, body } = createResponse("error", { code, context });
+    const {status, body} = createResponse("error", {code, context});
     res.status(status).json(body);
 }
 
@@ -60,7 +60,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
     })
 
     const handleRateExceeded = (_, res) => {
-        const { status, body } = createResponse("error", {
+        const {status, body} = createResponse("error", {
             code: "error.api.rate_exceeded",
             context: {
                 limit: env.rateLimitWindow
@@ -131,7 +131,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
             return next();
         }
 
-        const { success, error } = APIKeys.validateAuthorization(req);
+        const {success, error} = APIKeys.validateAuthorization(req);
         if (!success) {
             // We call next() here if either if:
             // a) we have user sessions enabled, meaning the request
@@ -168,7 +168,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
                 return fail(res, "error.api.auth.jwt.invalid");
             }
 
-            const [ type, token, ...rest ] = authorization.split(" ");
+            const [type, token, ...rest] = authorization.split(" ");
             if (!token || type.toLowerCase() !== 'bearer' || rest.length) {
                 return fail(res, "error.api.auth.jwt.invalid");
             }
@@ -185,11 +185,11 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
     });
 
     app.post('/', apiLimiter);
-    app.use('/', express.json({ limit: 1024 }));
+    app.use('/', express.json({limit: 1024}));
 
     app.use('/', (err, _, res, next) => {
         if (err) {
-            const { status, body } = createResponse("error", {
+            const {status, body} = createResponse("error", {
                 code: "error.api.invalid_body",
             });
             return res.status(status).json(body);
@@ -232,7 +232,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
             return fail(res, "error.api.link.missing");
         }
 
-        const { success, data: normalizedRequest } = await normalizeRequest(request);
+        const {success, data: normalizedRequest} = await normalizeRequest(request);
         if (!success) {
             return fail(res, "error.api.invalid_body");
         }
@@ -250,6 +250,8 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
             return fail(res, `error.api.${parsed.error}`, context);
         }
 
+        const normalizedUrl = normalizeURL(request.url);
+
         try {
             const result = await match({
                 host: parsed.host,
@@ -257,7 +259,11 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
                 params: normalizedRequest,
             });
 
-            res.status(result.status).json(result.body);
+            res.status(result.status).json({
+                host: parsed.host,
+                normalizedUrl,
+                ...result.body
+            });
         } catch {
             fail(res, "error.api.generic");
         }
@@ -313,7 +319,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
             ...Object.entries(req.headers)
         ]);
 
-        return stream(res, { type: 'internal', ...streamInfo });
+        return stream(res, {type: 'internal', ...streamInfo});
     };
 
     app.get('/itunnel', itunnelHandler);
@@ -386,7 +392,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
             host: '127.0.0.1',
             exclusive: true
         }, () => {
-            const { port } = server.address();
+            const {port} = server.address();
             console.log(`${Green('[✓]')} cobalt sub-instance running on 127.0.0.1:${port}`);
             setTunnelPort(port);
         });
